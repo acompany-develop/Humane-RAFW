@@ -185,6 +185,7 @@ int load_settings(sp_config_t &config)
     if(!cert_load_file(&config.signing_ca, ias_cert_file_str.c_str()))
     {
         std::string message = "Failed to load IAS cert file.";
+        print_debug_message(message, ERROR);
         exit(1);
     }
 
@@ -1411,6 +1412,7 @@ int do_RA(std::string isv_url, std::string &ra_ctx_b64,
     catch(...)
     {
         std::string message = "Failed to create IAS connection object.";
+        print_debug_message(message, ERROR);
         return -1;
     }
 

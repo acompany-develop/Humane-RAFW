@@ -123,9 +123,9 @@ App_Link_Flags := $(SGX_COMMON_CFLAGS) -L$(SGX_LIBRARY_PATH) \
 
 ## シミュレーションモードの場合は専用のライブラリを紐付ける
 ifneq ($(SGX_MODE), HW)
-	App_Link_Flags += -lsgx_uae_service_sim
+	App_Link_Flags += -lsgx_epid_sim -lsgx_quote_ex_sim
 else
-	App_Link_Flags += -lsgx_uae_service
+	App_Link_Flags += -lsgx_epid -lsgx_quote_ex
 endif
 
 ## オブジェクトファイルを指定
