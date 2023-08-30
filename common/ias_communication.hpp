@@ -28,7 +28,7 @@
 #define IAS_STATUS_BAD_CERTIFICATE      9998
 #define IAS_STATUS_BAD_SIGNATURE        9997
 
-#define IAS_API_DEF_VERSION 4
+#define IAS_API_DEF_VERSION 5
 
 class IAS_Communication
 {

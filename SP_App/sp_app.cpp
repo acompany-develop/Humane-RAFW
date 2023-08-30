@@ -601,8 +601,7 @@ int get_attestation_report(IAS_Communication *ias,
     if(!report_obj["platformInfoBlob"].IsNull())
     {
         print_debug_message(
-            "PIB (Platform Info Blob) is provided by IAS.", DEBUG_LOG);
-        print_debug_message("", DEBUG_LOG);
+            "PIB (Platform Info Blob) is provided by IAS ->", DEBUG_LOG);
         
         std::string pib_str = report_obj["platformInfoBlob"].ToString();
 
@@ -611,6 +610,9 @@ int get_attestation_report(IAS_Communication *ias,
 
         from_hexstring((uint8_t*)&msg4->pib,
             pib_str.c_str(), pib_str.length() / 2);
+
+        print_debug_message(pib_str, DEBUG_LOG);
+        print_debug_message("", DEBUG_LOG);
     }
     else
     {
