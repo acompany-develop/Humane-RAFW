@@ -126,9 +126,9 @@ int load_settings(sp_config_t &config)
     uint8_t spid_u8[16];
 
     int ret = from_hexstring(spid_u8,
-            (const void*)spid_char, strlen(spid_char));
+            (const void*)spid_char, strlen(spid_char) / 2);
 
-    if(!ret)
+    if(ret)
     {
         std::string message = "Failed to convert hex to uint8_t for SPID.";
         print_debug_message(message, ERROR);
@@ -219,9 +219,9 @@ int load_settings(sp_config_t &config)
     uint8_t mrenclave_u8[32];
 
     ret = from_hexstring(mrenclave_u8,
-        (const void*)mrenclave_char, strlen(mrenclave_char));
+        (const void*)mrenclave_char, strlen(mrenclave_char) / 2);
 
-    if(!ret)
+    if(ret)
     {
         std::string message = "Failed to convert hex to uint8_t for MRENCLAVE.";
         print_debug_message(message, ERROR);
@@ -249,9 +249,9 @@ int load_settings(sp_config_t &config)
     uint8_t mrsigner_u8[32];
 
     ret = from_hexstring(mrsigner_u8,
-        (const void*)mrsigner_char, strlen(mrsigner_char));
+        (const void*)mrsigner_char, strlen(mrsigner_char) / 2);
 
-    if(!ret)
+    if(ret)
     {
         std::string message = "Failed to convert hex to uint8_t for MRSIGNER.";
         print_debug_message(message, ERROR);
