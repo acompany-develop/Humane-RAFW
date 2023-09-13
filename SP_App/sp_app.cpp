@@ -29,10 +29,10 @@ using namespace httplib;
 /* 署名・検証で使用するSPの256bit ECDSA秘密鍵。
  * RA中にランダムに生成する鍵Gbとは別物。 */
 static const uint8_t service_provider_private_key[32] = {
-    0x2a, 0x28, 0x03, 0x26, 0x1f, 0xb4, 0x5a, 0x96,
-    0x51, 0xad, 0xaa, 0xa7, 0xe8, 0x76, 0x43, 0x36,
-    0x8f, 0x64, 0xab, 0xa4, 0xa1, 0x69, 0xff, 0xe6,
-    0x15, 0x50, 0x09, 0x10, 0x5d, 0x6d, 0x4d, 0xfa
+    0x99, 0x79, 0x76, 0x22, 0x9b, 0xb6, 0x26, 0x46,
+    0x66, 0xd3, 0xec, 0x4e, 0x96, 0x39, 0x71, 0x08,
+    0x28, 0x71, 0xae, 0x78, 0xfb, 0x13, 0x50, 0x85,
+    0x98, 0x28, 0x30, 0xcc, 0xfa, 0x49, 0xe9, 0x30
 };
 
 
@@ -553,7 +553,7 @@ int get_attestation_report(IAS_Communication *ias,
     }
     else if(ra_status == "SW_HARDENING_NEEDED")
     {
-        /* LVIやÆPIC Leak等に脆弱である事を示しているので、理想的には許可しては
+        /* LVIやMMIO Stale Data等に脆弱である事を示しているので、理想的には許可しては
          * ならないが、便宜上今回は通すようなロジックにする */
         msg4->status = Conditionally_Trusted;
         std::string desc = std::string("Deem the Enclave as Trusted, ") +
@@ -985,10 +985,10 @@ int process_msg1(std::string &ra_ctx_b64, IAS_Communication *ias,
 
 
     /* SigSP（Gb_Gaのハッシュに対するECDSA署名）の生成 */
-    uint8_t digest[32], r[32], s[32];
+    uint8_t r[32], s[32];
 
     ret = ecdsa_sign(gb_ga, 128,
-        config.service_private_key, r, s, digest);
+        config.service_private_key, r, s);
 
     if(ret)
     {

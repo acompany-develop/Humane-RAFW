@@ -1,4 +1,6 @@
 #include <openssl/cmac.h>
+#include <openssl/core_names.h>
+#include <openssl/param_build.h>
 #include <openssl/conf.h>
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
@@ -156,82 +158,125 @@ int evp_pubkey_to_sgx_ec256(sgx_ec256_public_t *sgx_pubkey, EVP_PKEY *pkey)
 /* sgx_ec256_public_tからEVP_PKEY公開鍵に変換 */
 EVP_PKEY* evp_pubkey_from_sgx_ec256(sgx_ec256_public_t *sgx_pubkey)
 {
-	EC_KEY *ec_key = NULL;
+	EVP_PKEY_CTX *pkey_ctx;
 	EVP_PKEY *pkey = NULL;
-	BIGNUM *gx = NULL;
-	BIGNUM *gy = NULL;
+	OSSL_PARAM_BLD *param_bld;
+	OSSL_PARAM *params = NULL;
+	uint8_t *pubkey = NULL;
+	BIGNUM *bn_gx = NULL;
+	BIGNUM *bn_gy = NULL;
+	int error_flag = 0;
 
-	do
+	try
 	{
-		/* sgx_ec256_public_tからgx, gyをビッグエンディアンで取得 */
-		if((gx = BN_lebin2bn((uint8_t*)sgx_pubkey->gx,
-			sizeof(sgx_pubkey->gx), NULL)) == NULL) break;
+		param_bld = OSSL_PARAM_BLD_new();
+		if(param_bld == NULL) throw std::exception();
 
-		if((gy = BN_lebin2bn((uint8_t*)sgx_pubkey->gy,
-			sizeof(sgx_pubkey->gy), NULL)) == NULL) break;
+		if(!OSSL_PARAM_BLD_push_utf8_string(param_bld, 
+			OSSL_PKEY_PARAM_GROUP_NAME, "prime256v1", 0))
+				throw std::exception();
 
-		/* 曲線指定 */
-		ec_key= EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
+		pkey_ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+		if(pkey_ctx == NULL) throw std::exception();
 
-		if(ec_key == NULL) break;
+		if(EVP_PKEY_fromdata_init(pkey_ctx) <= 0)
+			throw std::exception();
 
-		/* アフィン座標（gx, gy）からEC256鍵を生成 */
-		if(!EC_KEY_set_public_key_affine_coordinates(ec_key, gx, gy))
-		{
-			EC_KEY_free(ec_key);
-			ec_key = NULL;
-			break;
-		}
+		size_t pubkey_size = sizeof(sgx_pubkey->gx) + sizeof(sgx_pubkey->gy) + 1;
+		pubkey = new uint8_t[pubkey_size]();
 
-		pkey = EVP_PKEY_new();
-		if(pkey == NULL) break;
+		uint8_t *tmp_gx = new uint8_t[sizeof(sgx_pubkey->gx)]();
+		uint8_t *tmp_gy = new uint8_t[sizeof(sgx_pubkey->gy)]();
 
-		/* EVP_PKEYにEC_KEYから変換 */
-		if(!EVP_PKEY_set1_EC_KEY(pkey, ec_key))
-		{
-			EVP_PKEY_free(pkey);
-			pkey = NULL;
-		}
+		memcpy(tmp_gx, sgx_pubkey->gx, sizeof(sgx_pubkey->gx));
+		memcpy(tmp_gy, sgx_pubkey->gy, sizeof(sgx_pubkey->gy));
 
-	} while(false);
+		std::reverse(tmp_gx, tmp_gx + sizeof(sgx_pubkey->gx));
+		std::reverse(tmp_gy, tmp_gy + sizeof(sgx_pubkey->gy));
 
-	if(gx != NULL) BN_free(gx);
-	if(gy != NULL) BN_free(gy);
+		pubkey[0] = POINT_CONVERSION_UNCOMPRESSED;
+		memcpy(&pubkey[1], tmp_gx, sizeof(sgx_pubkey->gx));
+		memcpy(&pubkey[1 + sizeof(sgx_pubkey->gx)], tmp_gy, sizeof(sgx_pubkey->gy));
+
+		delete[] tmp_gx;
+		delete[] tmp_gy;
+
+		BIO_dump_fp(stdout, pubkey, pubkey_size);
+
+		if(!OSSL_PARAM_BLD_push_octet_string(
+			param_bld, "pub", pubkey, pubkey_size))
+				throw std::exception();
+
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		if(params == NULL) throw std::exception();
+		
+		if(EVP_PKEY_fromdata(pkey_ctx, &pkey, 
+			EVP_PKEY_PUBLIC_KEY, params) <= 0)
+				throw std::exception();
+	}
+	catch(...)
+	{
+		EVP_PKEY_free(pkey);
+	}
+
+	if(pubkey != NULL) delete[] pubkey;
+	if(bn_gx != NULL) BN_free(bn_gx);
+	if(bn_gy != NULL) BN_free(bn_gy);
+	if(pkey_ctx != NULL) EVP_PKEY_CTX_free(pkey_ctx);
+	if(params != NULL) OSSL_PARAM_free(params);
+	if(param_bld != NULL) OSSL_PARAM_BLD_free(param_bld);
 
 	return pkey;
 }
 
-
 /* uint8_tバイト列（配列）からEVP_PKEY秘密鍵に変換 */
 EVP_PKEY* evp_private_key_from_bytes(const uint8_t buf[32])
 {
-	EC_KEY *ec_key = NULL;
+	EVP_PKEY_CTX *pkey_ctx;
 	EVP_PKEY *pkey = NULL;
-	BIGNUM *bn_prvkey = NULL;
+	OSSL_PARAM_BLD *param_bld;
+	OSSL_PARAM *params = NULL;
+	BIGNUM *bn_priv = NULL;
+	int error_flag = 0;
 
-	do
+	try
 	{
-		ec_key = EC_KEY_new_by_curve_name(NID_X9_62_prime256v1);
-		if(ec_key == NULL) break;
+		param_bld = OSSL_PARAM_BLD_new();
+		if(param_bld == NULL) throw std::exception();
 
-		/* ハードコーディングされた秘密鍵はビッグエンディアン */
-		if((bn_prvkey = BN_bin2bn((uint8_t*)buf, 32, NULL)) == NULL) break;
+		if(!OSSL_PARAM_BLD_push_utf8_string(param_bld, 
+			OSSL_PKEY_PARAM_GROUP_NAME, "prime256v1", 0))
+				throw std::exception();
 
-		if(!EC_KEY_set_private_key(ec_key, bn_prvkey)) break;
+		pkey_ctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+		if(pkey_ctx == NULL) throw std::exception();
 
-		pkey = EVP_PKEY_new();
-		if(pkey == NULL) break;
+		if(EVP_PKEY_fromdata_init(pkey_ctx) <= 0)
+			throw std::exception();
 
-		if(!EVP_PKEY_set1_EC_KEY(pkey, ec_key))
-		{
-			EVP_PKEY_free(pkey);
-			pkey = NULL;
-		}
+		bn_priv = BN_bin2bn(buf, 32, NULL);
+		if(bn_priv == NULL) throw std::exception();
 
-	} while(false);
+		if(!OSSL_PARAM_BLD_push_BN(
+			param_bld, OSSL_PKEY_PARAM_PRIV_KEY, bn_priv))
+				throw std::exception();
 
-	if(bn_prvkey != NULL) BN_free(bn_prvkey);
-	if(ec_key != NULL) EC_KEY_free(ec_key);
+		params = OSSL_PARAM_BLD_to_param(param_bld);
+		if(params == NULL) throw std::exception();
+		
+		if(EVP_PKEY_fromdata(pkey_ctx, &pkey, 
+			EVP_PKEY_KEY_PARAMETERS | OSSL_KEYMGMT_SELECT_PRIVATE_KEY, params) <= 0)
+				throw std::exception();
+	}
+	catch(...)
+	{
+		EVP_PKEY_free(pkey);
+	}
+
+	if(bn_priv != NULL) BN_free(bn_priv);
+	if(pkey_ctx != NULL) EVP_PKEY_CTX_free(pkey_ctx);
+	if(params != NULL) OSSL_PARAM_free(params);
+	if(param_bld != NULL) OSSL_PARAM_BLD_free(param_bld);
 
 	return pkey;
 }
@@ -241,38 +286,53 @@ EVP_PKEY* evp_private_key_from_bytes(const uint8_t buf[32])
 int aes_128bit_cmac(uint8_t key[16],
 	uint8_t *message, size_t message_len, uint8_t mac[16])
 {
+	OSSL_LIB_CTX *lib_ctx = NULL;
+	EVP_MAC *evp_mac = NULL;
+	EVP_MAC_CTX *mac_ctx = NULL;
 	size_t mac_len;
-	int error_flag = 0;
-	CMAC_CTX *cmac_ctx = NULL;
+	OSSL_PARAM params[2];
+	int return_flag = 0;
 
-	do
+	try
 	{
-		cmac_ctx = CMAC_CTX_new();
-		if(cmac_ctx == NULL)
-		{
-			error_flag = 1;
-			break;
-		}
+		evp_mac = EVP_MAC_fetch(NULL, "CMAC", NULL);
+		if(evp_mac == NULL) throw std::exception();
 
-		if(!CMAC_Init(cmac_ctx, key, 16, EVP_aes_128_cbc(), NULL))
-		{
-			error_flag = 1;
-			break;
-		}
+		mac_ctx = EVP_MAC_CTX_new(evp_mac);
+		if(mac_ctx == NULL) throw std::exception();
 
-		if(!CMAC_Update(cmac_ctx, message, message_len))
-		{
-			error_flag = 1;
-			break;
-		}
+		std::string cipher_name = "AES-128-CBC";
 
-		if(!CMAC_Final(cmac_ctx, mac, &mac_len)) error_flag = 1;
+		params[0] = OSSL_PARAM_construct_utf8_string(
+			OSSL_MAC_PARAM_CIPHER, (char*)cipher_name.c_str(), 0);
+		params[1] = OSSL_PARAM_construct_end();
 
-	} while(false);
+		if(!EVP_MAC_init(mac_ctx, key, 16, params))
+			throw std::exception();
 
-	if(cmac_ctx != NULL) CMAC_CTX_free(cmac_ctx);
+		if(!EVP_MAC_update(mac_ctx, message, message_len))
+			throw std::exception();
+
+		if(!EVP_MAC_final(mac_ctx, NULL, &mac_len, 0))
+			throw std::exception();
+
+		if(mac_len != 16) throw std::exception();
+
+		if(!EVP_MAC_final(mac_ctx, mac, &mac_len, mac_len))
+			throw std::exception();
+
+	}
+	catch(...)
+	{
+		return_flag = 1;
+	}
+
 	
-	return error_flag;
+	if(lib_ctx != NULL) OSSL_LIB_CTX_free(lib_ctx);
+	if(mac_ctx != NULL) EVP_MAC_CTX_free(mac_ctx);
+	if(evp_mac != NULL) EVP_MAC_free(evp_mac);
+
+	return return_flag;
 }
 
 
@@ -320,54 +380,59 @@ int sha256_digest(const uint8_t *message, size_t message_len, uint8_t digest[32]
 
 /* ECDSA署名 */
 int ecdsa_sign(uint8_t *message, size_t message_len,
-	EVP_PKEY *pkey, uint8_t r[32], uint8_t s[32], uint8_t digest[32])
+	EVP_PKEY *pkey, uint8_t r[32], uint8_t s[32])
 {
-	ECDSA_SIG *sig = NULL;
-	EC_KEY *ec_key = NULL;
-	const BIGNUM *bn_r = NULL;
-	const BIGNUM *bn_s = NULL;
-
+	EVP_MD_CTX *md_ctx = NULL;
+	uint8_t *signature;
+	size_t sig_len = 0;
 	int error_flag = 0;
 
-	do
+	try
 	{
-		ec_key = EVP_PKEY_get1_EC_KEY(pkey);
-		if(ec_key == NULL)
-		{
-			error_flag = 1;
-			break;
-		}
+		md_ctx = EVP_MD_CTX_new();
+		if(md_ctx == NULL) throw std::exception();
 
-		if(sha256_digest(message, message_len, digest))
-		{
-			error_flag = 1;
-			break;
-		}
+		if(!EVP_DigestSignInit(md_ctx, NULL, EVP_sha256(), NULL, pkey))
+			throw std::exception();
 
-		sig = ECDSA_do_sign(digest, 32, ec_key);
-		if(sig == NULL)
-		{
-			error_flag = 1;
-			break;
-		}
+		if(!EVP_DigestSignUpdate(md_ctx, message, message_len))
+			throw std::exception();
 
-		ECDSA_SIG_get0(sig, &bn_r, &bn_s);
+		if(!EVP_DigestSignFinal(md_ctx, NULL, &sig_len))
+			throw std::exception();
 
-		if(!BN_bn2binpad(bn_r, r, 32))
-		{
-			error_flag = 1;
-			break;
-		}
-		if(!BN_bn2binpad(bn_s, s, 32))
-		{
-			error_flag = 1;
-			break;
-		}
+		if(sig_len <= 0) throw std::exception();
 
-	} while(false);
+		signature = (uint8_t*)OPENSSL_malloc(sig_len);
+		if(signature == NULL) throw std::exception();
 
-	if(sig != NULL) ECDSA_SIG_free(sig);
-	if(ec_key != NULL) EC_KEY_free(ec_key);
+		if(!EVP_DigestSignFinal(md_ctx, signature, &sig_len))
+			throw std::exception();
+
+		BIO_dump_fp(stdout, signature, sig_len);
+
+		/* 上記出力結果はASN.1形式であるため、生の署名値r,sに変換する */
+		const uint8_t *sig_ptr = signature;
+		ECDSA_SIG *ecdsa_sig = d2i_ECDSA_SIG(NULL, 
+			&sig_ptr, sig_len);
+
+		if(ecdsa_sig == NULL) throw std::exception();
+
+		const BIGNUM *bn_r = NULL;
+		const BIGNUM *bn_s = NULL;
+
+		ECDSA_SIG_get0(ecdsa_sig, &bn_r, &bn_s);
+
+		if(!BN_bn2binpad(bn_r, r, 32)) throw std::exception();
+		if(!BN_bn2binpad(bn_s, s, 32)) throw std::exception();
+	}
+	catch(...)
+	{
+		error_flag = 1;
+	}
+
+	if(!error_flag) OPENSSL_free(signature);
+	if(md_ctx != NULL) EVP_MD_CTX_free(md_ctx);
 
 	return error_flag;
 }

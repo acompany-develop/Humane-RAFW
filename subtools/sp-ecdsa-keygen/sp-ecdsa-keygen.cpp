@@ -2,6 +2,7 @@
 #include <openssl/conf.h>
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
+#include <openssl/core_names.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/pem.h>
@@ -20,16 +21,10 @@
 int evp_prvkey_to_u8(uint8_t (&u_prvkey)[32], EVP_PKEY *pkey)
 {
 	BIGNUM *bn_prvkey = NULL;
-	EC_KEY *ec_key = NULL;
-
-	ec_key = EVP_PKEY_get1_EC_KEY(pkey);
-	if(ec_key == NULL)
-	{
-		BN_free(bn_prvkey);
-		return -1;
-	}
-
-	bn_prvkey = (BIGNUM*)EC_KEY_get0_private_key(ec_key);
+	
+	if(!EVP_PKEY_get_bn_param(
+		pkey, OSSL_PKEY_PARAM_PRIV_KEY, &bn_prvkey))
+			return -1;
 
 	if(!BN_bn2bin(bn_prvkey, u_prvkey))
 	{

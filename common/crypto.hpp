@@ -18,7 +18,7 @@ int aes_128bit_cmac(uint8_t key[16],
 	uint8_t *message, size_t message_len, uint8_t mac[16]);
 int sha256_digest(const uint8_t *message, size_t message_len, uint8_t digest[32]);
 int ecdsa_sign(uint8_t *message, size_t message_len,
-	EVP_PKEY *pkey, uint8_t r[32], uint8_t s[32], uint8_t digest[32]);
+	EVP_PKEY *pkey, uint8_t r[32], uint8_t s[32]);
 
 int cert_load(X509 **cert, const char *pem_data);
 int cert_load_size(X509 **cert, const char *pem_data, size_t sz);
