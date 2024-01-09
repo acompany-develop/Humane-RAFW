@@ -435,4 +435,4 @@ SP_Cpp_Files := SP_App/sp_app.cpp common/base64.cpp common/debug_print.cpp commo
 * settings_template.ini: 主にSP用の設定を列挙するためのINIファイル。**使用時には必ず`settings.ini`にリネームする事**。
 
 ## シーケンス図
-![humane-rafw](https://github.com/acompany-develop/sgx-related/assets/31073471/77255c4c-bc1b-483e-9761-322339bc339e)
+![humane-rafw](https://github.com/acompany-develop/Humane-RAFW/assets/31073471/94b2a93d-f8f8-4cbd-a6cb-07ac06d299a1)
